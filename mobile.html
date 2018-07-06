@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+		<style>
+			#output {
+			    display: block;
+			    
+			}
+			.page-title{
+				font-family: 'Roboto',sans-serif;
+			}
+			.results-title{
+				margin-top: 3%;
+				font-size: 35px;
+				border-bottom: 3px solid orange;
+			}
+			.container{
+				margin: 0 auto;
+				width: 1280px;
+			}
+			.error{
+				color:red;
+				font-size:20px;
+				margin-top:2%;
+			}
+			.optimized-link {
+			    color: orange;
+			}
+			.button{
+				display:inline-block;
+				padding:1em 1.2em;
+				margin:0 0.1em 0.1em 0;
+				border:0.16em solid rgba(255,255,255,0);
+				border-radius:1em;
+				border-color:#fafafa;
+				box-sizing: border-box;
+				text-decoration:none;
+				font-family:'Roboto',sans-serif;
+				font-weight:300;
+				color:#FFFFFF;
+				text-shadow: 0 0.04em 0.04em rgba(0,0,0,0.35);
+				text-align:center;
+				transition: all 0.2s;
+			}
+
+			.buttons {
+			    background: #f9f9f9;
+			    padding: 1em;
+			}
+
+		</style>
+		<script>
+			var i = 0;
+			var xmlData = document.createElement("results");
+
+			function createFileToDowload(data){
+				let xml = `data:application/xml,<?xml version="1.0" encoding="UTF-8"?>${encodeURIComponent(data.outerHTML)}`;			  
+				let a = document.createElement("a");
+				a.setAttribute("class", "button");
+				a.setAttribute("style", "background-color:#4e9af1");
+				let filename = "results.xml";
+				a.download = a.textContent =  "results.xml";
+				a.href = xml;
+				document.getElementById("output").appendChild(a);
+			}
+			
+
+			function readTextFile(file)
+			{
+			    var rawFile = new XMLHttpRequest();
+			    var allText = "";
+			    rawFile.open("GET", file, false);
+			    rawFile.onreadystatechange = function ()
+			    {
+			        if(rawFile.readyState === 4)
+			        {
+			            if(rawFile.status === 200 || rawFile.status == 0)
+			            {
+			                allText = rawFile.responseText;
+			                //console.log(allText);
+			            }else{
+			            	console.log("status is not 200 & it is not 0");
+			            }
+			        }else{
+			        	console.log("readystate is not 4");
+			        }
+
+			    }
+			    rawFile.send(null);
+			    return allText;
+			}
+			
+			function getSuccessOutput(type){
+
+				var allText = $("#urls-textarea").val();
+				var urls = allText.split('\n');
+				$("#output").empty();
+				for(i = 0; i< urls.length; i++){
+					var page = urls[i];
+					if(page){
+						$.ajax({
+					        url:'https://www.googleapis.com/pagespeedonline/v4/runPagespeed?strategy=mobile&url=' + page +'&amp;callback=runPagespeedCallbacks&key=AIzaSyDJmrgsAgl2FbFwpsPwPK5K23kETUXZc80',
+					        async: true,
+					        complete: function (response) {
+					        	var result = JSON.parse(response.responseText);
+					            
+					            if(type=="image"){
+					            	displayImageOptimizationResults(result, page);
+					        	}
+
+					        	if(type=="css"){
+					        		displayCSSResults(result, page);	
+					        	}
+
+					        	if(type=="js"){
+					        		displayJSResults(result, page);	
+					        	}			
+											
+								if(i == urls.length){
+									createFileToDowload(xmlData);
+								}
+								
+					        },
+					        error: function () {
+					        	var p = document.createElement("p");
+									p.setAttribute("class", "error");
+									p.innerHTML('Bummer: there was an error!');
+									document.getElementById("output").appendChild(p);
+					            
+					        },
+				    	}); //end of ajax
+					}
+				}
+
+			}
+
+			function displayTopSuggestions(result){
+				
+			  var results = [];
+			  var ruleResults = result.formattedResults.ruleResults;
+			  for (var i in ruleResults) {
+			    var ruleResult = ruleResults[i];
+			    // Don't display lower-impact suggestions.
+			    if (ruleResult.ruleImpact < 3.0) continue;
+			    results.push({name: ruleResult.localizedRuleName,
+			                  impact: ruleResult.ruleImpact});
+			  }
+			  results.sort(sortByImpact);
+			  
+			  var ul = document.createElement('ul');
+			  for (var i = 0, len = results.length; i < len; i++) {
+			    var r = document.createElement('li');
+			    r.innerHTML = results[i].name;
+			    ul.insertBefore(r, null);
+			  }
+			  if (ul.hasChildNodes()) {
+			    document.getElementById("output").appendChild(ul);
+			  } else {
+			    var div = document.createElement('div');
+			    div.innerHTML = 'No high impact suggestions. Good job!';
+			    document.getElementById("output").appendChild(div);
+			  }
+
+			}
+
+			function addPageTitle(page){
+				var p = document.createElement("p");
+				p.setAttribute("class", "results-title");
+				p.innerHTML = page;
+				document.getElementById("output").appendChild(p);
+			}
+
+			function displayImageOptimizationResults(result, page){
+			  addPageTitle(page);
+			  displayTopSuggestions(result);
+			  var results = [];
+			  if(result.formattedResults.ruleResults.OptimizeImages.urlBlocks !== undefined || result.formattedResults.ruleResults.OptimizeImages.urlBlocks != null){
+				  var urlBlocks = result.formattedResults.ruleResults.OptimizeImages.urlBlocks;
+				  console.log(urlBlocks);
+				  var parent = document.createElement("parenturl");
+				  var parentPage = document.createElement("parentPage");
+				  parentPage.innerHTML = page
+				  parent.appendChild(parentPage);
+				  for (var i = 0, len = urlBlocks.length; i < len; i++) {
+				  	console.log(urlBlocks[i].urls.length);
+				  	var urls = urlBlocks[i].urls;
+				  	var header = urlBlocks[i].header;
+				  	createHeaderText(header);
+				  	for (var j = 0, l = urls.length; j < l; j++) {
+				  		var url = urls[j].result.args[0].value; //url
+				  		var size = urls[j].result.args[1].value; //size_in_bytes
+				  		var percentage = urls[j].result.args[2].value; //percentage
+				  		addImageOptimizationResults(parent, url, size, percentage);
+				  	
+				  	}//inner for urls
+				  }//outer for urlBlocks
+			  }
+			}
+
+			function displayJSResults(result, page){
+				addPageTitle(page);
+				displayTopSuggestions(result);
+			  var results = [];
+			  if(result.formattedResults.ruleResults.MinifyJavaScript.urlBlocks !== undefined || result.formattedResults.ruleResults.MinifyJavaScript.urlBlocks != null){
+				  var urlBlocks = result.formattedResults.ruleResults.MinifyJavaScript.urlBlocks;
+				  console.log(urlBlocks);
+				  				  var parent = document.createElement("parenturl");
+				  var parentPage = document.createElement("parentPage");
+				  parentPage.innerHTML = page
+				  parent.appendChild(parentPage);
+				  for (var i = 0, len = urlBlocks.length; i < len; i++) {
+				  	console.log(urlBlocks[i].urls.length);
+				  	var urls = urlBlocks[i].urls;
+				  	var header = urlBlocks[i].header;
+				  	createHeaderText(header);
+
+
+				  	for (var j = 0, l = urls.length; j < l; j++) {
+				  		var url = urls[j].result.args[0].value; //url
+				  		var size = urls[j].result.args[1].value; //size_in_bytes
+				  		var percentage = urls[j].result.args[2].value; //percentage
+				  		addImageOptimizationResults(parent, url, size, percentage);
+				  	
+				  	}//inner for urls
+				  }//outer for urlBlocks
+			  }
+			}
+			
+			function displayCSSResults(result, page){
+				addPageTitle(page);
+				displayTopSuggestions(result);
+			  var results = [];
+			  if(result.formattedResults.ruleResults.MinifyCss.urlBlocks !== undefined || result.formattedResults.ruleResults.MinifyCss.urlBlocks != null){
+				  var urlBlocks = result.formattedResults.ruleResults.MinifyCss.urlBlocks;
+				  console.log(urlBlocks);
+				  				  var parent = document.createElement("parenturl");
+				  var parentPage = document.createElement("parentPage");
+				  parentPage.innerHTML = page
+				  parent.appendChild(parentPage);
+				  for (var i = 0, len = urlBlocks.length; i < len; i++) {
+				  	console.log(urlBlocks[i].urls.length);
+				  	var urls = urlBlocks[i].urls;
+				  	var header = urlBlocks[i].header;
+				  	createHeaderText(header);
+
+
+				  	for (var j = 0, l = urls.length; j < l; j++) {
+				  		var url = urls[j].result.args[0].value; //url
+				  		var size = urls[j].result.args[1].value; //size_in_bytes
+				  		var percentage = urls[j].result.args[2].value; //percentage
+				  		addImageOptimizationResults(parent,url, size, percentage);
+				  	
+				  	}//inner for urls
+				  }//outer for urlBlocks
+			  }
+			}
+
+			function createHeaderText(header){
+				var text = header.format;
+				text = text.replace("{{BEGIN_LINK}}", "");
+				text = text.replace("{{END_LINK}}", "");
+				var googleOptimizeLink = header.args[0].value;
+				var totalKbReduction = header.args[1].value;
+				var totalPercentageReduction = header.args[2].value;
+				text = text.replace("{{SIZE_IN_BYTES}}", totalKbReduction);
+				text = text.replace("{{PERCENTAGE}}", totalPercentageReduction);  
+				var a = document.createElement("a");
+				a.setAttribute('href', googleOptimizeLink);
+				a.setAttribute('class', "optimized-link");
+				a.innerHTML = text;
+				document.getElementById("output").appendChild(a);
+				//Optimize the following images to reduce their size by 310.5KiB (74% reduction).
+			}
+
+			function addImageOptimizationResults(parent, url, size, percentage){
+				//create xml data
+				var item = document.createElement('result');
+				var urlResult = document.createElement("url");
+				urlResult.innerHTML = url;
+				let sz = document.createElement('size');
+				sz.innerHTML = size;
+				let prcnt = document.createElement('percent');
+				prcnt.innerHTML = percentage
+				item.appendChild(urlResult);
+				item.appendChild(sz);
+				item.appendChild(prcnt);
+				parent.appendChild(item);
+				xmlData.appendChild(parent);
+
+
+				var text = "Compressing {{URL}} could save {{SIZE}} ({{PERCENTAGE}} reduction).";
+				text = text.replace("{{URL}}", url);
+				text = text.replace("{{SIZE}}", size);
+				text = text.replace("{{PERCENTAGE}}", percentage);
+				var p = document.createElement("p");
+				p.innerHTML = text;
+				document.getElementById("output").appendChild(p);
+				//Optimize the following images to reduce their size by 310.5KiB (74% reduction).
+			}
+
+			function insertAfter(referenceNode, newNode)
+			{
+			    referenceNode.parentNode.insertBefore( newNode, referenceNode.nextSibling );
+			}
+			
+			
+
+			// Helper function that sorts results in order of impact.
+			function sortByImpact(a, b) { return b.impact - a.impact; }
+		</script>
+		<meta charset="UTF-8">
+	</head>
+
+
+	<body>
+		<div class="container">
+			<div class="nav"><a href="index.html">Desktop</a></div>
+			<h1 class="page-title">Mobile Page Optimization Suggestions</h1>
+			<h2>Instructions</h2>
+			<ul>
+				<li><strong>Step 1. </strong> Enter URLs in the text box below. One URL per line. Formatted as: https://www.exampleurl.com</li>
+				<li><strong>Step 2. </strong> Press the Image button to get suggestions for image optimizations, JS button for JS optimization tips and CSS button for CSS optimization tips.</li>
+				<li><strong>Step 3. </strong> The page may take a few minutes to load. The results will appear below the text box.</li>
+				<li><strong>Step 4. </strong> Use the button at the very bottom of the page to download an XML results file.</li>
+				<li><strong>Step 5. </strong> Import the XML file into Excel for easier to understand results.</li>
+			<div class="buttons">
+				<h3>Enter URL's In This Text Area.</h3>
+				<textarea id="urls-textarea" rows="10" cols="150">
+				</textarea>
+				<a href="#" class="button" style="background-color:#4e9af1" onclick="return getSuccessOutput('image');">Image Optimizaton</a>
+				<a href="#" class="button" style="background-color:#4e9af1" onclick="return getSuccessOutput('js');">JS Optimizaton</a>
+				<a href="#" class="button" style="background-color:#4e9af1" onclick="return getSuccessOutput('css');">CSS Optimizaton</a>
+			</div>
+			<div id="output"></div>
+		</div>
+	</body>
+
+
+</html>
